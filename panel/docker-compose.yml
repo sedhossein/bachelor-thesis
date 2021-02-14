@@ -1,0 +1,44 @@
+version: '3'
+services:
+  db:
+    restart: always
+    image: postgres:12
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: dashboard
+      POSTGRES_PASSWORD: dashboard
+      POSTGRES_DB: dashboard
+      PGPORT: 5432
+    volumes:
+      - ./psql/backup.sql:/docker-entrypoint-initdb.d/init.sql
+  app:
+    build: .
+    command: sh -c "python manage.py makemigrations &&
+      python manage.py collectstatic --noinput &&
+      gunicorn core.wsgi:application --bind 0.0.0.0:${APP_PORT}" # -2n+1
+    volumes:
+      - .:/dashboard:rw
+      - static_volume:/home/app/dashboard/staticfiles
+    env_file:
+      - .env
+    image: dashboard
+    expose:
+      - ${APP_PORT}
+    restart: "on-failure"
+    depends_on:
+      - db
+  nginx:
+    restart: always
+    build: ./nginx
+    ports:
+      - "1300:80"
+    volumes:
+      - ./nginx:/etc/nginx/conf.d
+      - static_volume:/home/app/dashboard/staticfiles
+    depends_on:
+      - app
+      - db
+volumes:
+  postgres_data:
+  static_volume:
